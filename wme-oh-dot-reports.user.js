@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2020.02.03.001
+// @version      2020.02.07.001
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -31,7 +31,7 @@
     var _scriptVersion = GM_info.script.version;
     var _scriptVersionChanges = [
         GM_info.script.name + '\nv' + _scriptVersion + '\n\nWhat\'s New\n------------------------------',
-        '\n- New script.'
+        '\n- minor sorting change.'
     ].join('');
 
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
@@ -716,7 +716,7 @@
             '.oh-dot-table td,th {color:black; padding:1px 4px;} ',
             '.oh-dot-table th {background-color:gainsboro;} ',
             '.oh-dot-table .table-img {max-width:24px; max-height:24px;} ',
-            '.oh-dot-table .Closed {background-color:salmon;} ',
+            '.oh-dot-table .Closed {background-color:#ff9999;} ',
             '.oh-dot-table .Restricted {background-color:lightyellow;} ',
             '.tooltip.top > .tooltip-arrow {border-top-color:white;} ',
             '.tooltip.bottom > .tooltip-arrow {border-bottom-color:white;} ',
@@ -752,9 +752,9 @@
     }
 
     function init() {
-        _icon.crash = 1;
-        _icon.roadwork = 2;
-        _icon.weather = 3;
+        _icon.weather = 1;
+        _icon.crash = 2;
+        _icon.roadwork = 3;
         loadSettingsFromStorage();
         initGui();
         _window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
