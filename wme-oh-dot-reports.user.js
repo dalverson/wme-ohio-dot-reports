@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2020.02.07.001
+// @version      2020.07.26.001
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -31,7 +31,7 @@
     var _scriptVersion = GM_info.script.version;
     var _scriptVersionChanges = [
         GM_info.script.name + '\nv' + _scriptVersion + '\n\nWhat\'s New\n------------------------------',
-        '\n- minor sorting change.'
+        '\n- Open Link button for project web resource if present.'
     ].join('');
 
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
@@ -295,6 +295,23 @@
         updateReportsVisibility();
     }
 
+    function checkURL(projURL) {
+        var btnHtml = '';
+        var pURL = '';
+        var n = projURL.search('http');
+        if (n >= 0) {
+            pURL = projURL.substr(n);
+        }
+        else if (projURL.match(/ohio.gov|state.oh.us|www/)) {
+            pURL = 'http://' + projURL;
+            }
+
+        if (pURL) {
+            btnHtml = '<button type="button" class="btn btn-primary btn-open-dot-report" data-dot-report-url="' + pURL + '" style="float:left;">Open Link</button>';
+        }
+        return btnHtml;
+    }
+
     function addReportToMap(report){
         var coord = report.coordinates;
         var imgName;
@@ -319,7 +336,6 @@
         }
         report.properties.icon = icon1;
         imgName += '.png';
-        //imgName = 'incident.png';
         var size = new OpenLayers.Size(29,29);
         var offset = new OpenLayers.Pixel(-(size.w/2), -size.h);
         var now = new Date(Date.now());
@@ -339,13 +355,19 @@
         _mapLayer.addMarker(marker);
 
         //var dt = new Date(report.details.unixtime * 1000);
+        var urlBtn = '';
+        if (report.Contact.ProjectURL) {
+            urlBtn = checkURL( report.Contact.ProjectURL );
+        }
         var content = [
             report.properties.location_description + '&nbsp;' + report.Direction,
             '<br><br>',
             report.details,
             //'<br><br>',
             //'<span style="font-weight:bold">Display Time:</span>&nbsp;&nbsp;' + dt.toLocaleDateString() + '&nbsp;&nbsp;' + dt.toLocaleTimeString(),
-            '<div"><hr style="margin-bottom:5px;margin-top:5px;border-color:gainsboro"><div style="display:table;width:100%"><button type="button" style="float:right;" class="btn btn-primary btn-archive-dot-report" data-dot-report-id="' + report.id + '">Archive</button></div></div></div>'
+            '<div"><hr style="margin-bottom:5px;margin-top:5px;border-color:gainsboro"><div style="display:table;width:100%">',
+            urlBtn,
+            '<button type="button" style="float:right;" class="btn btn-primary btn-archive-dot-report" data-dot-report-id="' + report.id + '">Archive</button></div></div></div>'
         ].join('');
         var $imageDiv = $(marker.icon.imageDiv)
         .css('cursor', 'pointer')
@@ -521,10 +543,6 @@
     }
 
     function processReports(reports, context) {
-        //reports.forEach(function(report) {
-        //    report.type = context.type;
-        //});
-        //Array.prototype.push.apply(context.results.reports, reports);
         var x = parseXml( reports );
 
         if (context.results.callCount === context.results.expectedCallCount) {
@@ -706,7 +724,7 @@
         showScriptInfoAlert();
         fetchReports(processReports);
 
-        var classHtml =  [
+        var classHtml = [
             '.oh-dot-table th,td,tr {cursor:pointer;} ',
             '.oh-dot-table .centered {text-align:center;} ',
             '.oh-dot-table th:hover,tr:hover {background-color:aliceblue; outline: -webkit-focus-ring-color auto 5px;} ',
