@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2020.07.26.001
+// @version      2021.06.11.001
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -31,7 +31,7 @@
     var _scriptVersion = GM_info.script.version;
     var _scriptVersionChanges = [
         GM_info.script.name + '\nv' + _scriptVersion + '\n\nWhat\'s New\n------------------------------',
-        '\n- Open Link button for project web resource if present.'
+        '\n- Different icons for closures.'
     ].join('');
 
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
@@ -320,6 +320,10 @@
             case 'Crash':
                 imgName = 'incident';
                 icon1 = _icon.crash;
+                if (report.Status == 'Closed') {
+                    imgName = 'cl-incident';
+                    icon1 = _icon.crash_closed;
+                }
                 break;
             case 'Flooding':
             case 'Snow/Ice':
@@ -329,10 +333,19 @@
             case 'Roadwork - Planned':
             case 'Roadwork - Unplanned':
                 imgName = 'construction';
+                if (report.Status == 'Closed') {
+                    imgName = 'closed';
+                    icon1 = _icon.roadwork_closed;
+                }
                 break;
             default:
                 imgName = 'incident';
                 icon1 = _icon.crash;
+                if (report.Status == 'Closed') {
+                    imgName = 'cl-incident';
+                    icon1 = _icon.crash_closed;
+                }
+
         }
         report.properties.icon = icon1;
         imgName += '.png';
@@ -771,8 +784,10 @@
 
     function init() {
         _icon.weather = 1;
-        _icon.crash = 2;
-        _icon.roadwork = 3;
+        _icon.crash = 4;
+        _icon.crash_closed = 2;
+        _icon.roadwork = 5;
+        _icon.roadwork_closed = 3;
         loadSettingsFromStorage();
         initGui();
         _window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
