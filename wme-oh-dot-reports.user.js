@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2021.06.11.001
+// @version      2021.12.15.001
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -791,7 +791,8 @@
         loadSettingsFromStorage();
         initGui();
         _window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
-        W.app.modeController.model.bind('change:mode', onModeChanged);
+        if (W.app.hasOwnProperty('modeController'))
+            W.app.modeController.model.bind('change:mode', onModeChanged);
         log('Initialized.', 0);
     }
 
