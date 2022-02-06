@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2021.12.15.001
+// @version      2022.02.06.001
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -31,7 +31,8 @@
     var _scriptVersion = GM_info.script.version;
     var _scriptVersionChanges = [
         GM_info.script.name + '\nv' + _scriptVersion + '\n\nWhat\'s New\n------------------------------',
-        '\n- Different icons for closures.'
+        '\n- Info window is now draggable.',
+        '\n- fixes for latest beta.'
     ].join('');
 
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
@@ -139,7 +140,7 @@
             var $div = rpt.imageDiv;
             if ((!$excludeDiv || $div[0] !== $excludeDiv[0]) && $div.data('state') === 'pinned') {
                 $div.data('state', '');
-                $div.popover('hide');
+                removePopup(rpt);
             }
         });
     }
@@ -152,12 +153,12 @@
 
     function toggleMarkerPopover($div) {
         hideAllPopovers($div);
+        var id = $div.data('reportId');
+        var report = getReport(id);
         if ($div.data('state') !== 'pinned') {
-            var id = $div.data('reportId');
-            var report = getReport(id);
             $div.data('state', 'pinned');
-            W.map.setCenter(report.marker.lonlat);
-            $div.popover('show');
+            // W.map.setCenter(report.marker.lonlat);
+            showPopup(report);
             if (report.archived) {
                 $('.btn-archive-dot-report').text("Un-Archive");
             }
@@ -168,7 +169,7 @@
             $div.data('report').dataRow.css('background-color','beige');
         } else {
             $div.data('state', '');
-            $div.popover('hide');
+            removePopup(report);
         }
     }
 
@@ -357,43 +358,19 @@
         var icon = new OpenLayers.Icon(report.imgUrl,size,null);
         var marker = new OpenLayers.Marker(new OpenLayers.LonLat(coord[0],coord[1]).transform("EPSG:4326", "EPSG:900913"),icon);
 
-        var popoverTemplate = ['<div class="reportPopover popover" style="max-width:500px;width:500px;">',
-                               '<div class="arrow"></div>',
-                               '<div class="popover-title"></div>',
-                               '<div class="popover-content">',
-                               '</div>',
-                               '</div>'].join('');
         marker.report = report;
-        //marker.events.register('click', marker, onMarkerClick);
         _mapLayer.addMarker(marker);
 
-        //var dt = new Date(report.details.unixtime * 1000);
-        var urlBtn = '';
+        report.urlBtn = '';
         if (report.Contact.ProjectURL) {
-            urlBtn = checkURL( report.Contact.ProjectURL );
+            report.urlBtn = checkURL( report.Contact.ProjectURL );
         }
-        var content = [
-            report.properties.location_description + '&nbsp;' + report.Direction,
-            '<br><br>',
-            report.details,
-            //'<br><br>',
-            //'<span style="font-weight:bold">Display Time:</span>&nbsp;&nbsp;' + dt.toLocaleDateString() + '&nbsp;&nbsp;' + dt.toLocaleTimeString(),
-            '<div"><hr style="margin-bottom:5px;margin-top:5px;border-color:gainsboro"><div style="display:table;width:100%">',
-            urlBtn,
-            '<button type="button" style="float:right;" class="btn btn-primary btn-archive-dot-report" data-dot-report-id="' + report.id + '">Archive</button></div></div></div>'
-        ].join('');
         var $imageDiv = $(marker.icon.imageDiv)
         .css('cursor', 'pointer')
         .addClass('ohDotReport')
-        .attr({
-            'data-toggle':'popover',
-            title:'',
-            'data-content':content,
-            'data-original-title':'<div style"width:100%;"><div style="float:left;max-width:330px;color:#5989af;font-size:120%;">' + report.Category + '</div><div style="float:right;"><a class="close-popover" href="javascript:void(0);">X</a></div><div style="clear:both;"</div></div>'
+        .on('click', function() {
+            toggleReportPopover($(this));
         })
-
-        .popover({trigger: 'manual', html:true,placement: 'auto top', template:popoverTemplate})
-        .on('click', function() {toggleReportPopover($(this));})
         .data('reportId', report.id)
         .data('state', '');
 
@@ -401,6 +378,34 @@
         if (report.archived) { $imageDiv.addClass('oh-dot-archived-marker'); }
         report.imageDiv = $imageDiv;
         report.marker = marker;
+    }
+
+    function showPopup(rpt)
+    {
+        var popHtml = '<div id="ohPopup" class="reportPop popup" style="max-width:500px;width:500px;">' +
+            '<div class="arrow"></div>' +
+            '<div class="pop-title pop-title-' + rpt.Status + '" id="pop-drag">' + rpt.Category + '<div style="float:right;"><div class="close-popover">X</div></div></div>' +
+            '<div class="pop-content">' +
+            rpt.properties.location_description + '&nbsp;' + rpt.Direction + '<br><br>' +
+            rpt.details + '</div>' +
+            '<div><hr style="margin-bottom:5px;margin-top:5px;border-color:gainsboro"><div class="pop-btns" style="display:table;width:100%">' + rpt.urlBtn +
+            '<button type="button" style="float:right;" class="btn btn-primary btn-archive-dot-report" data-dot-report-id="' + rpt.id + '">Archive</button></div></div>' +
+            '</div>';
+        $("body").append(popHtml);
+        var iconofs = rpt.imageDiv.offset();
+        var center = $("#ohPopup").width()/2;
+        var ofs = {};
+        ofs.top = iconofs.top + 30;
+        ofs.left = iconofs.left - center;
+        $("#ohPopup").offset( ofs );
+        $("#ohPopup").show();
+        $('#ohPopup').draggable({cursor: "move", handle: '#pop-drag'});
+        $(".close-popover").click(function() { toggleReportPopover(rpt.imageDiv); });
+    }
+    function removePopup(rpt)
+    {
+        $("#ohPopup").remove();
+        $("#ohPopup").hide();
     }
 
     function isArray(o)
@@ -751,7 +756,13 @@
             '.oh-dot-table .Restricted {background-color:lightyellow;} ',
             '.tooltip.top > .tooltip-arrow {border-top-color:white;} ',
             '.tooltip.bottom > .tooltip-arrow {border-bottom-color:white;} ',
-            'a.close-popover {text-decoration:none;padding:0px 3px;border-width:1px;background-color:white;border-color:ghostwhite} a.close-popover:hover {padding:0px 4px;border-style:outset;border-width:1px;background-color:white;border-color:ghostwhite;} ',
+            '.reportPop {display: block; position: absolute; width: 500px;left: 30%;top: 35%;background: #fff;display: none;}',
+            '.pop-title {background: #efefef;border: #ddd solid 1px;position: relative;display: block;}',
+            '.pop-title-Closed {background: #ff9999;}',
+            '.pop-title-Restricted {background-color:lightyellow;}',
+            '.pop-content {display: block;font-family: sans-serif;padding: 5px 10px;}',
+            '.pop-btns {padding: 5px 10px; }',
+            '.close-popover {text-decoration:none;padding:0px 3px;cursor: pointer;border-width:1px;background-color:white;border-color:ghostwhite} .close-popover:hover {padding:0px 4px;border-style:outset;border-width:1px;background-color:white;border-color:ghostwhite;} ',
             '#oh-dot-refresh-popup {position:absolute;z-index:9999;top:80px;left:650px;background-color:rgb(120,176,191);e;font-size:120%;padding:3px 11px;box-shadow:6px 8px rgba(20,20,20,0.6);border-radius:5px;color:white;} ',
             '.refreshIcon:hover {color:blue; text-shadow: 2px 2px #aaa;} .refreshIcon:active{ text-shadow: 0px 0px; }',
             '.oh-dot-archived-marker {opacity:0.5;} ',
