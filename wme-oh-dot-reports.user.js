@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2022.07.19.001
+// @version      2022.08.22.001
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
@@ -31,8 +31,7 @@
     var _scriptVersion = GM_info.script.version;
     var _scriptVersionChanges = [
         GM_info.script.name + '\nv' + _scriptVersion + '\n\nWhat\'s New\n------------------------------',
-        '\n- Info window is now draggable.',
-        '\n- fixes for latest beta.'
+        '\n- hide markers when zoomed out.'
     ].join('');
 
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
@@ -405,6 +404,7 @@
         $(".close-popover").click(function() { toggleReportPopover(rpt.imageDiv); });
     }
 
+    // dragElement from https://www.w3schools.com/howto/howto_js_draggable.asp
     function dragElement(elmnt) {
       var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
       if (document.getElementById("pop-drag")) {
@@ -558,8 +558,15 @@
 
         for (var i = 0; i < top.length; i++) {
             var report = top[i];
+            var dts = report.ActivityEndDateTime.split(" ")[0];
+            var dt1 = dts.split("/");
+            var enddt = new Date(parseInt(dt1[2],10), parseInt(dt1[0],10) - 1, parseInt(dt1[1],10), 23, 59, 0);
 
-            if (report.Longitude) {
+            if (enddt < Date.now()) {
+                log( [ "skip:", report.Road, report.Category, report.ActivityEndDateTime ].join(' '), 0);
+                continue;
+            }
+            else if (report.Longitude) {
                 report.coordinates = [ report.Longitude, report.Latitude ];
                 report.properties = {};
                 report.properties.icon = _icon.roadwork;
@@ -691,8 +698,8 @@
 
         //I18n.translations[I18n.locale].layers.name.__stateDotReports = "OH DOT Reports";
         W.map.addLayer(_mapLayer);
-        _mapLayer.setVisibility(_settings.layerVisible);
-        _mapLayer.events.register('visibilitychanged',null,onLayerVisibilityChanged);
+        _mapLayer.setVisibility(true);
+        // _mapLayer.events.register('visibilitychanged',null,onLayerVisibilityChanged);
     }
 
     function restoreUserTab() {
@@ -819,6 +826,10 @@
 
     var _previousZoom;
 
+    function checkZoom() {
+        _mapLayer.setVisibility(W.map.getZoom() > 11);
+    }
+
     function loadSettingsFromStorage() {
         var settings = $.parseJSON(localStorage.getItem(_settingsStoreName));
         if(!settings) {
@@ -829,7 +840,7 @@
                 archivedReports:{}
             };
         } else {
-            settings.layerVisible = (settings.layerVisible === true);
+            settings.layerVisible = true; // (settings.layerVisible === true);
             if(typeof settings.hideArchivedReports === 'undefined') { settings.hideArchivedReports = true; }
             settings.archivedReports = settings.archivedReports ? settings.archivedReports : {};
         }
@@ -847,6 +858,7 @@
         _window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
         if (W.app.hasOwnProperty('modeController'))
             W.app.modeController.model.bind('change:mode', onModeChanged);
+        W.map.events.register("zoomend", null, checkZoom);
         log('Initialized.', 0);
     }
 
