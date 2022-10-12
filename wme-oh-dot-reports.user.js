@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2022.08.22.001
+// @version      2022.10.12.001
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
 // @grant        GM_xmlhttpRequest
 // @connect      www.buckeyetraffic.org
+// @connect      ohgo.com
 
 // ==/UserScript==
 
@@ -20,6 +21,9 @@
 /* global Components */
 /* global I18n */
 
+const DEC = s => atob(atob(s));
+const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT1dFMlkyVmhObU09';
+
 (function() {
     'use strict';
 
@@ -31,7 +35,7 @@
     var _scriptVersion = GM_info.script.version;
     var _scriptVersionChanges = [
         GM_info.script.name + '\nv' + _scriptVersion + '\n\nWhat\'s New\n------------------------------',
-        '\n- hide markers when zoomed out.'
+        '\n- update to new data feed.'
     ].join('');
 
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
@@ -361,9 +365,9 @@
         _mapLayer.addMarker(marker);
 
         report.urlBtn = '';
-        if (report.Contact.ProjectURL) {
-            report.urlBtn = checkURL( report.Contact.ProjectURL );
-        }
+        //if (report.Contact.ProjectURL) {
+        //    report.urlBtn = checkURL( report.Contact.ProjectURL );
+        //}
         var $imageDiv = $(marker.icon.imageDiv)
         .css('cursor', 'pointer')
         .addClass('ohDotReport')
@@ -456,100 +460,6 @@
         return Object.prototype.toString.apply(o) === '[object Array]';
     }
 
-    function parseNode(xmlNode, result, arrayTags)
-    {
-        if (xmlNode.nodeName == "#text" || xmlNode.nodeName == '#cdata-section') {
-            var v = xmlNode.nodeValue;
-            if (v.trim()) {
-               result['#text'] = v;
-            }
-            return;
-        }
-
-        var jsonNode = {};
-        var existing = result[xmlNode.nodeName];
-        if(existing)
-        {
-            if(!isArray(existing))
-            {
-                result[xmlNode.nodeName] = [existing, jsonNode];
-            }
-            else
-            {
-                result[xmlNode.nodeName].push(jsonNode);
-            }
-        }
-        else
-        {
-            if(arrayTags && arrayTags.indexOf(xmlNode.nodeName) != -1)
-            {
-                result[xmlNode.nodeName] = [jsonNode];
-            }
-            else
-            {
-                result[xmlNode.nodeName] = jsonNode;
-            }
-        }
-
-        if(xmlNode.attributes)
-        {
-            var length = xmlNode.attributes.length;
-            for(var i = 0; i < length; i++)
-            {
-                var attribute = xmlNode.attributes[i];
-                jsonNode[attribute.nodeName] = attribute.nodeValue;
-            }
-        }
-
-        var len = xmlNode.childNodes.length;
-        for( i = 0; i < len; i++)
-        {
-            parseNode(xmlNode.childNodes[i], jsonNode, arrayTags);
-            var nm = xmlNode.childNodes[i].nodeName;
-            if (nm == '#cdata-section') { nm = '#text'; }
-            if ( nm && jsonNode.hasOwnProperty(nm) ) {
-                var val = '';
-                if ( jsonNode[nm].hasOwnProperty('#text')) {
-                    val = jsonNode[nm]['#text'];
-                    jsonNode[nm] = val;
-                }
-                else if (Object.keys(jsonNode[nm]).length === 0) {
-                    jsonNode[nm] = val;
-                }
-            }
-        }
-    }
-
-    function parseXml(xml, arTags)
-    {
-        var dom = null;
-        if (window.DOMParser)
-        {
-            dom = (new DOMParser()).parseFromString(xml, "text/xml");
-        }
-        else if (window.ActiveXObject)
-        {
-            dom = new ActiveXObject('Microsoft.XMLDOM');
-            dom.async = false;
-            if (!dom.loadXML(xml))
-            {
-                throw dom.parseError.reason + " " + dom.parseError.srcText;
-            }
-        }
-        else
-        {
-            throw "cannot parse xml string!";
-        }
-
-        var result = {};
-        for (let i = 0; i < dom.childNodes.length; i++)
-        {
-            parseNode(dom.childNodes[i], result, arTags);
-        }
-
-        return result;
-    }
-
     function processReportDetails(reportDetails, reports) {
         _reports = [];
         _mapLayer.clearMarkers();
@@ -558,43 +468,59 @@
 
         for (var i = 0; i < top.length; i++) {
             var report = top[i];
-            var dts = report.ActivityEndDateTime.split(" ")[0];
-            var dt1 = dts.split("/");
-            var enddt = new Date(parseInt(dt1[2],10), parseInt(dt1[0],10) - 1, parseInt(dt1[1],10), 23, 59, 0);
-
-            if (enddt < Date.now()) {
-                log( [ "skip:", report.Road, report.Category, report.ActivityEndDateTime ].join(' '), 0);
-                continue;
-            }
-            else if (report.Longitude) {
-                report.coordinates = [ report.Longitude, report.Latitude ];
+            if (report.longitude) {
+                report.coordinates = [ report.longitude, report.latitude ];
                 report.properties = {};
                 report.properties.icon = _icon.roadwork;
-                report.id = report.Id; // legacy name
-                if (report.DistrictNumber.length == 1) {
-                    report.dist = 'D0' + report.DistrictNumber;
-                } else {
-                    report.dist = 'D' + report.DistrictNumber;
+                report.Id = report.id; // legacy name
+                report.dist = 'D??';
+                if (report.district != null) {
+                    if (report.district.length > 3) {
+                        report.dist = 'D' + report.district.split(" ")[1];
+                    } else {
+                        report.dist = report.district;
+                    }
                 }
-                report.properties.location_description = [ report.dist + '-' + report.CountyCode, report.Road, report.Status ].join(' ');
+                report.county = "";
+                report.Category = report.category;
+                report.Direction = report.direction;
+                if (report.roadStatus != null) {
+                    report.Status = report.roadStatus;
+                }
+                else if (report.status != null) {
+                    report.Status = report.status;
+                }
 
-                report.details = report.ActivityStartDateTime + ' - ' + report.ActivityEndDateTime + '<br>Location: ';
-                if (report.StartMileDescription) {
+                report.properties.location_description = [ report.dist + '-' + report.county, report.routeName, report.Status ].join(' ');
+                report.details = '';
+
+                //report.details = report.StartDate + ' - ' + report.EndDate + '<br>Location: ';
+                if (report.startDate != null) {
+                    report.details += report.startDate;
+                    }
+                if (report.endDate != null) {
+                    report.details += " thru " + report.endDate;
+                    }
+                if (report.details.length > 2) {
+                    report.details += '<br>';
+                }
+
+                /* if (report.StartMileDescription) {
                     report.details += report.StartMileDescription;
                     if (report.EndMileDescription && report.StartMileDescription != report.EndMileDescription) {
                         report.details += ' TO ' + report.EndMileDescription;
                     }
-                }
-                if (report.StartMile) {
+                } */
+                /*if (report.StartMile) {
                     report.details += ' (MM: ' + report.StartMile + ' ';
                     if (report.EndMile && report.EndMile != report.StartMile) {
                         report.details += '- ' + report.EndMile + ' ';
                     }
                     report.details += ') ';
-                }
+                } */
 
-                report.details += '<br>' + report.Description + '<br>';
-                if (report.Contact.ProjectURL) { report.details += '<br>' + report.Contact.ProjectURL; }
+                report.details += report.description;
+                // if (report.Contact.ProjectURL) { report.details += '<br>' + report.Contact.ProjectURL; }
                 report.archived = false;
                 if (_settings.archivedReports.hasOwnProperty(report.Id)) {
                     // if ( _settings.archivedReports[report.Id].updateNumber < report.situationUpdateKey.updateNumber) {
@@ -611,10 +537,14 @@
     }
 
     function processReports(reports, context) {
-        var x = parseXml( reports );
+        var x = reports.results;
+        x.forEach(function(report) {
+            report.type = context.type;
+        });
+        Array.prototype.push.apply(context.results.reports, x);
 
         if (context.results.callCount === context.results.expectedCallCount) {
-            processReportDetails(x.RoadActivities.RoadActivity);
+            processReportDetails(context.results.reports);
         }
     }
 
@@ -622,9 +552,9 @@
         GM_xmlhttpRequest({
             method: 'GET',
             context: context,
-            url: 'http://www.buckeyetraffic.org/services/' + context.type + '.aspx',
+            url: 'https://publicapi.ohgo.com/api/v1/' + context.type + `?${DEC(TOKEN)}`,
             //onload: function(res) { res.context.results.callCount += 1; processReports($.parseJSON(/\((.*)\)/.exec(res.responseText)[1]).features, res.context); },
-			onload: function(res) { res.context.results.callCount += 1; processReports(res.responseText, res.context); },
+            onload: function(res) { res.context.results.callCount += 1; processReports($.parseJSON(res.responseText), res.context); },
             onError: function(err) { log(err,0); }
         });
     }
@@ -632,15 +562,15 @@
     function fetchReports() {
         var results = {callCount: 0, reports: [], expectedCallCount: 1};
         //var weatherClosureContext = { type:'weather_closure', results:results };
-        //var incidentContext= { type:'incident', results:results };
-        //var constructionContext = { type:'construction', results:results };
+        var incidentContext= { type:'incidents', results:results };
+        var constructionContext = { type:'construction', results:results };
         //var highImpactContext = { type: 'high_impact_incident', results: results};
-		var activityContext = { type: 'RoadActivity', results: results};
+        //var activityContext = { type: 'TrafficSpeedAndAlertMarkers', results: results};
 
-		requestReports(activityContext);
+        //requestReports(activityContext);
         //requestReports(weatherClosureContext);
-        //requestReports(incidentContext);
-        //requestReports(constructionContext);
+        requestReports(incidentContext);
+        requestReports(constructionContext);
         //requestReports(highImpactContext);
     }
 
