@@ -1,10 +1,13 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2022.10.12.001
+// @version      2023.02.28.01
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
-// @include      /^https:\/\/(www|beta)\.waze\.com\/(?!user\/)(.{2,6}\/)?editor\/?.*$/
+// @homepage     https://www.waze.com/forum/viewtopic.php?t=297874
+// @match        https://beta.waze.com/*editor*
+// @match        https://www.waze.com/*editor*
+// @exclude      https://www.waze.com/*user/*editor/*
 // @grant        GM_xmlhttpRequest
 // @connect      www.buckeyetraffic.org
 // @connect      ohgo.com
@@ -13,10 +16,7 @@
 
 /* global $ */
 /* global OpenLayers */
-/* global GM_info */
 /* global W */
-/* global GM_xmlhttpRequest */
-/* global unsafeWindow */
 /* global Waze */
 /* global Components */
 /* global I18n */
@@ -35,13 +35,13 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
     var _scriptVersion = GM_info.script.version;
     var _scriptVersionChanges = [
         GM_info.script.name + '\nv' + _scriptVersion + '\n\nWhat\'s New\n------------------------------',
-        '\n- update to new data feed.'
+        '\n- minor update.'
     ].join('');
 
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
     var _mapLayer = null;
     var _settings = {};
-    var _tabDiv = {};  // stores the user tab div so it can be restored after switching back from Events mode to Default mode
+    // var _tabDiv = {};  // stores the user tab div so it can be restored after switching back from Events mode to Default mode
     var _reports = [];
     var _lastShownTooltipDiv;
     var _tableSortKeys = [];
@@ -245,7 +245,6 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         $row.report = report;
     }
 
-
     function onClickColumnHeader(obj) {
         var prop;
         switch (/oh-dot-table-(.*)-header/.exec(obj.id)[1]) {
@@ -349,7 +348,6 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
                     imgName = 'cl-incident';
                     icon1 = _icon.crash_closed;
                 }
-
         }
         report.properties.icon = icon1;
         imgName += '.png';
@@ -632,9 +630,60 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         // _mapLayer.events.register('visibilitychanged',null,onLayerVisibilityChanged);
     }
 
-    function restoreUserTab() {
-        $('#user-tabs > .nav-tabs').append(_tabDiv.tab);
-        $('#user-info > .flex-parent > .tab-content').append(_tabDiv.panel);
+    async function initUserPanel() {
+        var tabLabel;
+        var tabPane;
+        const pane = '<div class="side-panel-section>"><label style="width:100%; cursor:pointer; border-bottom: 1px solid #e0e0e0; margin-top:9px;" ' +
+              'data-toggle="collapse" data-target="#ohDotSettingsCollapse" class="collapsed" aria-expanded="false">' +
+              '<span class="fa fa-caret-down" style="margin-right:5px;font-size:120%;"></span>Hide reports...</label>' +
+              '<div id="ohDotSettingsCollapse" class="collapse" aria-expanded="false" style="height: 0px;">' +
+              '<div class="controls-container"><input type="checkbox" name="hideOHDotArchivedReports" id="hideOHDotArchivedReports">' +
+              '<label for="hideOHDotArchivedReports">Archived</label></div></div></div>' +
+              '<div class="side-panel-section>" id="oh-dot-report-table">' +
+              '<div><span title="Click to refresh DOT reports" class="fa fa-refresh refreshIcon oh-dot-refresh-reports oh-dot-table-label" style="cursor:pointer;"></span>' +
+              '<span class="oh-dot-table-label oh-dot-report-count count"></span>' +
+              '<span id="archive-all" class="oh-dot-table-label oh-dot-table-action right">Archive all</span>' +
+              '<span class="oh-dot-table-label right">|</span><span id="unarchive-all" class="oh-dot-table-label oh-dot-table-action right">Un-Archive all</span></div>';
+             // '<table class="oh-dot-table"><thead><tr><th id="oh-dot-table-archive-header" class="centered"><span class="fa fa-archive" style="font-size:120%" title="Sort by archived"></span></th>' +
+             // '<th id="oh-dot-table-category-header" title="Sort by report type"></th><th id="oh-dot-table-desc-header" title="Sort by description">Description</th></tr></thead>';
+
+        if (W.userscripts === undefined) {
+            tabLabel = $('<li>').append(
+                $('<a>', {'data-toggle':'tab', href:'#sidepanel-oh-statedot'}).text('OH DOT').append(
+                    $('<span>', {title:'Click to refresh DOT reports', class:'fa fa-refresh refreshIcon nav-tab-icon oh-dot-refresh-reports', style:'cursor:pointer;'})
+                )
+            );
+            tabPane = $('<div>', {class:'tab-pane', id:'sidepanel-oh-statedot'});
+            tabPane.append(pane);
+            $('#user-tabs > .nav-tabs').append(tabLabel);
+            $('#user-info > .flex-parent > .tab-content').append(tabPane);
+        }
+        else {
+            var res = W.userscripts.registerSidebarTab("ohio-statedot");
+            tabLabel = res.tabLabel;
+            tabPane = res.tabPane;
+            tabLabel.innerText = "OH DOT";
+            tabLabel.title = "Ohio DOT Reports";
+            tabPane.innerHTML = pane;
+            await W.userscripts.waitForElementConnected(tabPane);
+            $(tabLabel.parentElement).append(
+                    $('<span>', {title:'Click to refresh DOT reports', class:'fa fa-refresh refreshIcon nav-tab-icon oh-dot-refresh-reports', style:'cursor:pointer;'})
+                );
+        }
+
+        $("#archive-all").click(function() {
+            var r = confirm('Are you sure you want to archive all reports for ' + _settings.state + '?');
+            if (r===true) {
+                archiveAllReports(false);
+            }
+        });
+        $("#unarchive-all").click(function() {
+            var r = confirm('Are you sure you want to un-archive all reports for ' + _settings.state + '?');
+            if (r===true) {
+                archiveAllReports(true);
+            }
+        });
+
         $('[id^=hideOHDot]').change(function(){
             saveSettingsToStorage();
             updateReportsVisibility();
@@ -647,58 +696,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
             setTimeout(function() { refreshPopup.hide(); }, 1500);
             e.stopPropagation();
         });
-    }
 
-    function onModeChanged(model, modeId, context) {
-        hideAllReportPopovers();
-        if(!modeId || modeId === 1) {
-            restoreUserTab();
-        }
-    }
-
-    function initUserPanel() {
-        _tabDiv.tab = $('<li>').append(
-            $('<a>', {'data-toggle':'tab', href:'#sidepanel-oh-statedot'}).text('OH DOT').append(
-                $('<span>', {title:'Click to refresh DOT reports', class:'fa fa-refresh refreshIcon nav-tab-icon oh-dot-refresh-reports', style:'cursor:pointer;'})
-            )
-        );
-
-        _tabDiv.panel = $('<div>', {class:'tab-pane', id:'sidepanel-oh-statedot'}).append(
-            $('<div>',  {class:'side-panel-section>'}).append(
-                $('<label style="width:100%; cursor:pointer; border-bottom: 1px solid #e0e0e0; margin-top:9px;" data-toggle="collapse" data-target="#ohDotSettingsCollapse"><span class="fa fa-caret-down" style="margin-right:5px;font-size:120%;"></span>Hide reports...</label>')).append(
-                $('<div>',{id:'ohDotSettingsCollapse',class:'collapse'}).append(
-                    $('<div>',{class:'controls-container'})
-                    .append($('<input>', {type:'checkbox',name:'hideOHDotArchivedReports',id:'hideOHDotArchivedReports'}))
-                    .append($('<label>', {for:'hideOHDotArchivedReports'}).text('Archived'))
-                )
-            )
-        ).append(
-            $('<div>', {class:'side-panel-section>', id:'oh-dot-report-table'}).append(
-                $('<div>').append(
-                    $('<span>', {title:'Click to refresh DOT reports', class:'fa fa-refresh refreshIcon oh-dot-refresh-reports oh-dot-table-label', style:'cursor:pointer;'})
-                ).append(
-                    $('<span>',{class:'oh-dot-table-label oh-dot-report-count count'})
-                ).append(
-                    $('<span>',{class:'oh-dot-table-label oh-dot-table-action right'}).text('Archive all').click(function() {
-                        var r = confirm('Are you sure you want to archive all reports for ' + _settings.state + '?');
-                        if (r===true) {
-                            archiveAllReports(false);
-                        }
-                    })
-                ).append(
-                    $('<span>', {class:'oh-dot-table-label right'}).text('|')
-                ).append(
-                    $('<span>',{class:'oh-dot-table-label oh-dot-table-action right'}).text('Un-Archive all').click(function() {
-                        var r = confirm('Are you sure you want to un-archive all reports for ' + _settings.state + '?');
-                        if (r===true) {
-                            archiveAllReports(true);
-                        }
-                    })
-                )
-            )
-        );
-
-        restoreUserTab();
         $('<div>', {id: 'oh-dot-refresh-popup',}).text('DOT Reports Refreshed').hide().appendTo($('div#editor-container'));
 
         (function setChecks(settingProps, checkboxIds) {
@@ -786,8 +784,8 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         loadSettingsFromStorage();
         initGui();
         _window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
-        if (W.app.hasOwnProperty('modeController'))
-            W.app.modeController.model.bind('change:mode', onModeChanged);
+        //if (W.app.hasOwnProperty('modeController'))
+        //    W.app.modeController.model.bind('change:mode', onModeChanged);
         W.map.events.register("zoomend", null, checkZoom);
         log('Initialized.', 0);
     }
