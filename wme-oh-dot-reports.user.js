@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2023.02.28.01
+// @version      2024.05.27.01
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @homepage     https://www.waze.com/forum/viewtopic.php?t=297874
@@ -41,7 +41,6 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
     var _mapLayer = null;
     var _settings = {};
-    // var _tabDiv = {};  // stores the user tab div so it can be restored after switching back from Events mode to Default mode
     var _reports = [];
     var _lastShownTooltipDiv;
     var _tableSortKeys = [];
@@ -392,12 +391,12 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
             '<div><hr style="margin-bottom:5px;margin-top:5px;border-color:gainsboro"><div class="pop-btns" style="display:table;width:100%">' + rpt.urlBtn +
             '<button type="button" style="float:right;" class="btn btn-primary btn-archive-dot-report" data-dot-report-id="' + rpt.id + '">Archive</button></div></div>' +
             '</div>';
-        $("body").append(popHtml);
+        $(".view-area.olMap").append(popHtml);
         var iconofs = rpt.imageDiv.offset();
         var center = $("#ohPopup").width()/2;
         var ofs = {};
         ofs.top = iconofs.top + 30;
-        ofs.left = iconofs.left - center;
+        ofs.left = iconofs.left - center - $('#sidebarContent')[0].offsetWidth;
         $("#ohPopup").offset( ofs );
         $("#ohPopup").show();
 
@@ -647,29 +646,16 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
              // '<table class="oh-dot-table"><thead><tr><th id="oh-dot-table-archive-header" class="centered"><span class="fa fa-archive" style="font-size:120%" title="Sort by archived"></span></th>' +
              // '<th id="oh-dot-table-category-header" title="Sort by report type"></th><th id="oh-dot-table-desc-header" title="Sort by description">Description</th></tr></thead>';
 
-        if (W.userscripts === undefined) {
-            tabLabel = $('<li>').append(
-                $('<a>', {'data-toggle':'tab', href:'#sidepanel-oh-statedot'}).text('OH DOT').append(
-                    $('<span>', {title:'Click to refresh DOT reports', class:'fa fa-refresh refreshIcon nav-tab-icon oh-dot-refresh-reports', style:'cursor:pointer;'})
-                )
+        var res = W.userscripts.registerSidebarTab("ohio-statedot");
+        tabLabel = res.tabLabel;
+        tabPane = res.tabPane;
+        tabLabel.innerText = "OH DOT";
+        tabLabel.title = "Ohio DOT Reports";
+        tabPane.innerHTML = pane;
+        await W.userscripts.waitForElementConnected(tabPane);
+        $(tabLabel.parentElement).append(
+                $('<span>', {title:'Click to refresh DOT reports', class:'fa fa-refresh refreshIcon nav-tab-icon oh-dot-refresh-reports', style:'cursor:pointer;'})
             );
-            tabPane = $('<div>', {class:'tab-pane', id:'sidepanel-oh-statedot'});
-            tabPane.append(pane);
-            $('#user-tabs > .nav-tabs').append(tabLabel);
-            $('#user-info > .flex-parent > .tab-content').append(tabPane);
-        }
-        else {
-            var res = W.userscripts.registerSidebarTab("ohio-statedot");
-            tabLabel = res.tabLabel;
-            tabPane = res.tabPane;
-            tabLabel.innerText = "OH DOT";
-            tabLabel.title = "Ohio DOT Reports";
-            tabPane.innerHTML = pane;
-            await W.userscripts.waitForElementConnected(tabPane);
-            $(tabLabel.parentElement).append(
-                    $('<span>', {title:'Click to refresh DOT reports', class:'fa fa-refresh refreshIcon nav-tab-icon oh-dot-refresh-reports', style:'cursor:pointer;'})
-                );
-        }
 
         $("#archive-all").click(function() {
             var r = confirm('Are you sure you want to archive all reports for ' + _settings.state + '?');
@@ -784,8 +770,6 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         loadSettingsFromStorage();
         initGui();
         _window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
-        //if (W.app.hasOwnProperty('modeController'))
-        //    W.app.modeController.model.bind('change:mode', onModeChanged);
         W.map.events.register("zoomend", null, checkZoom);
         log('Initialized.', 0);
     }
