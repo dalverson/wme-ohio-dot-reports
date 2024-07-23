@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2024.05.27.01
+// @version      2024.07.22.01
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @homepage     https://www.waze.com/forum/viewtopic.php?t=297874
@@ -470,10 +470,10 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
                 report.properties = {};
                 report.properties.icon = _icon.roadwork;
                 report.Id = report.id; // legacy name
-                report.dist = 'D??';
+                report.dist = '';
                 if (report.district != null) {
                     if (report.district.length > 3) {
-                        report.dist = 'D' + report.district.split(" ")[1];
+                        report.dist = 'D' + report.district.split(" ")[1] + ' -';
                     } else {
                         report.dist = report.district;
                     }
@@ -488,7 +488,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
                     report.Status = report.status;
                 }
 
-                report.properties.location_description = [ report.dist + '-' + report.county, report.routeName, report.Status ].join(' ');
+                report.properties.location_description = [ report.dist + report.county, report.routeName, report.Status ].join(' ').trimStart();
                 report.details = '';
 
                 //report.details = report.StartDate + ' - ' + report.EndDate + '<br>Location: ';
@@ -675,6 +675,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
             updateReportsVisibility();
         });
         $('.oh-dot-refresh-reports').click(function(e) {
+            //debugDumpLayers();
             hideAllReportPopovers();
             fetchReports(processReports);
             var refreshPopup = $('#oh-dot-refresh-popup');
@@ -762,6 +763,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
     }
 
     function init() {
+        log('Initializing...', 1);
         _icon.weather = 1;
         _icon.crash = 4;
         _icon.crash_closed = 2;
@@ -775,17 +777,12 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
     }
 
     function bootstrap() {
-        var wz = _window.W;
-        if (wz && wz.loginManager &&
-            wz.loginManager.events.register &&
-            wz.map && wz.loginManager.user) {
-            log('Initializing...', 1);
+        if (typeof W === 'object' && W.userscripts?.state.isReady) {
             init();
         } else {
-            log('Bootstrap failed. Trying again...', 1);
-            _window.setTimeout(function () {
-                bootstrap();
-            }, 1000);
+            document.addEventListener("wme-ready", init, {
+                once: true,
+            });
         }
     }
 
