@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2024.07.22.01
+// @version      2024.11.30.01
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
-// @homepage     https://www.waze.com/forum/viewtopic.php?t=297874
-// @match        https://beta.waze.com/*editor*
+// @homepage     https://www.waze.com/discuss/t/script-wme-ohio-dot-reports/281863
 // @match        https://www.waze.com/*editor*
+// @match        https://beta.waze.com/*editor*
 // @exclude      https://www.waze.com/*user/*editor/*
+// @exclude      https://www.waze.com/discuss/*
 // @grant        GM_xmlhttpRequest
 // @connect      www.buckeyetraffic.org
 // @connect      ohgo.com
@@ -15,11 +16,8 @@
 // ==/UserScript==
 
 /* global $ */
-/* global OpenLayers */
 /* global W */
-/* global Waze */
-/* global Components */
-/* global I18n */
+/* global SDK_INITIALIZED */
 
 const DEC = s => atob(atob(s));
 const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT1dFMlkyVmhObU09';
@@ -32,14 +30,17 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
     var _settingsStoreName = 'oh_dot_report_settings';
     var _alertUpdate = false;
     var _debugLevel = 0;
-    var _scriptVersion = GM_info.script.version;
+    var wmeSDK;
+    const _script_display_name = 'OH Dot Reports';
+    const _layer_name = 'OH Dot Reports';
+    const _script_unique_id = 'ohio-statedot';
+    const _scriptVersion = GM_info.script.version;
     var _scriptVersionChanges = [
         GM_info.script.name + '\nv' + _scriptVersion + '\n\nWhat\'s New\n------------------------------',
         '\n- minor update.'
     ].join('');
 
     var _imagesPath = 'https://github.com/dalverson/wme-ohio-dot-reports/raw/master/images/';
-    var _mapLayer = null;
     var _settings = {};
     var _reports = [];
     var _lastShownTooltipDiv;
@@ -50,7 +51,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
 
     function log(message, level) {
         if (message && level <= _debugLevel) {
-            console.log('OH DOT Reports: ' + message);
+            console.log('OH DOT: ' + message);
         }
     }
 
@@ -58,7 +59,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         if (localStorage) {
             var settings = {
                 lastVersion: _scriptVersion,
-                layerVisible: _mapLayer.visibility,
+                layerVisible: true, // SDK - layer visibility ??
                 state: _settings.state,
                 hideArchivedReports: $('#hideOHDotArchivedReports').is(':checked'),
                 archivedReports:_settings.archivedReports
@@ -127,21 +128,18 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
                 hideArchived && report.archived;
             if (hide) {
                 report.dataRow.hide();
-                if (report.imageDiv) { report.imageDiv.hide(); }
             } else {
                 visibleCount += 1;
                 report.dataRow.show();
-                if (report.imageDiv) { report.imageDiv.show(); }
             }
         });
         $('.oh-dot-report-count').text(visibleCount + ' of ' + _reports.length + ' reports');
     }
 
-    function hideAllPopovers($excludeDiv) {
+    function hideAllPopovers(id) {
         _reports.forEach(function(rpt) {
-            var $div = rpt.imageDiv;
-            if ((!$excludeDiv || $div[0] !== $excludeDiv[0]) && $div.data('state') === 'pinned') {
-                $div.data('state', '');
+            if (rpt.state == 'pinned') {
+                rpt.state = '';
                 removePopup(rpt);
             }
         });
@@ -153,13 +151,12 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         });
     }
 
-    function toggleMarkerPopover($div) {
-        hideAllPopovers($div);
-        var id = $div.data('reportId');
+    function toggleMarkerPopover(id) {
         var report = getReport(id);
-        if ($div.data('state') !== 'pinned') {
-            $div.data('state', 'pinned');
-            // W.map.setCenter(report.marker.lonlat);
+        const curstate = report.state;
+        hideAllPopovers(id);
+        if (curstate !== 'pinned') {
+            report.state = 'pinned';
             showPopup(report);
             if (report.archived) {
                 $('.btn-archive-dot-report').text("Un-Archive");
@@ -168,16 +165,16 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
             $('.btn-open-dot-report').click(function(evt) {evt.stopPropagation(); window.open($(this).data('dotReportUrl'),'_blank');});
             $('.reportPopover,.close-popover').click(function(evt) {evt.stopPropagation(); hideAllReportPopovers();});
             //$(".close-popover").click(function() {hideAllReportPopovers();});
-            $div.data('report').dataRow.css('background-color','beige');
+            report.dataRow.css('background-color','beige');
         } else {
-            $div.data('state', '');
+            report.state = '';
             removePopup(report);
         }
     }
 
-    function toggleReportPopover($div) {
+    function toggleReportPopover(id) {
         deselectAllDataRows();
-        toggleMarkerPopover($div);
+        toggleMarkerPopover(id);
     }
 
     function hideAllReportPopovers() {
@@ -189,10 +186,8 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         report.archived = archive;
         if (archive) {
             _settings.archivedReports[report.id] = {updateNumber: report.id};
-            report.imageDiv.addClass('oh-dot-archived-marker');
         }else {
             delete _settings.archivedReports[report.id];
-            report.imageDiv.removeClass('oh-dot-archived-marker');
         }
         if (updateUi) {
             saveSettingsToStorage();
@@ -232,13 +227,11 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
             var $row = $(this);
             var id = $row.data('reportId');
             var marker = getReport(id).marker;
-            var $imageDiv = report.imageDiv;
-            //if (!marker.onScreen()) {
-            W.map.setCenter(marker.lonlat);
-            //}
-            toggleReportPopover($imageDiv);
 
+            wmeSDK.Map.setMapCenter({lonLat: marker.glonlat});
+            toggleReportPopover(id);
         }).data('reportId', report.id);
+
         report.dataRow = $row;
         $table.append($row);
         $row.report = report;
@@ -315,7 +308,6 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
     }
 
     function addReportToMap(report){
-        var coord = report.coordinates;
         var imgName;
         var icon1 = _icon.roadwork;
         switch (report.Category) {
@@ -349,35 +341,26 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
                 }
         }
         report.properties.icon = icon1;
-        imgName += '.png';
-        var size = new OpenLayers.Size(29,29);
-        var offset = new OpenLayers.Pixel(-(size.w/2), -size.h);
-        var now = new Date(Date.now());
+        report.imgUrl = _imagesPath + imgName + '.png';
 
-        report.imgUrl = _imagesPath + imgName;
-        var icon = new OpenLayers.Icon(report.imgUrl,size,null);
-        var marker = new OpenLayers.Marker(new OpenLayers.LonLat(coord[0],coord[1]).transform("EPSG:4326", "EPSG:900913"),icon);
-
+        const geo = { type: "Point", coordinates: [ report.longitude, report.latitude] };
+        var marker;
+        wmeSDK.Map.addFeatureToLayer( { feature: { type: 'Feature', id: report.id, geometry: geo, properties: { type: imgName }, },
+                                                layerName: _layer_name } );
+        marker = { geometry: geo };
+        marker.glonlat = {"lat": report.latitude, "lon": report.longitude };
         marker.report = report;
-        _mapLayer.addMarker(marker);
 
         report.urlBtn = '';
-        //if (report.Contact.ProjectURL) {
-        //    report.urlBtn = checkURL( report.Contact.ProjectURL );
-        //}
-        var $imageDiv = $(marker.icon.imageDiv)
-        .css('cursor', 'pointer')
-        .addClass('ohDotReport')
-        .on('click', function() {
-            toggleReportPopover($(this));
-        })
-        .data('reportId', report.id)
-        .data('state', '');
-
-        $imageDiv.data('report', report);
-        if (report.archived) { $imageDiv.addClass('oh-dot-archived-marker'); }
-        report.imageDiv = $imageDiv;
+        report.state = '';
         report.marker = marker;
+    }
+
+    function onFeatureClick(e) {
+        if (e.layerName == _layer_name) {
+           log('got feature click: ' + e.featureId, 1);
+           toggleReportPopover(e.featureId);
+        }
     }
 
     function showPopup(rpt)
@@ -391,18 +374,33 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
             '<div><hr style="margin-bottom:5px;margin-top:5px;border-color:gainsboro"><div class="pop-btns" style="display:table;width:100%">' + rpt.urlBtn +
             '<button type="button" style="float:right;" class="btn btn-primary btn-archive-dot-report" data-dot-report-id="' + rpt.id + '">Archive</button></div></div>' +
             '</div>';
-        $(".view-area.olMap").append(popHtml);
-        var iconofs = rpt.imageDiv.offset();
-        var center = $("#ohPopup").width()/2;
+        //const mapEle = wmeSDK.Map.getMapViewportElement();
+        const $mapEle = $(".view-area.olMap");
+        $mapEle.append(popHtml);
+
+        const wid = $("#ohPopup").width();
+        const half = wid/2;
+        var pix = W.map.getPixelFromLonLat(rpt.marker.glonlat); // SDK - need replacement func
+        log(['click','x',pix.x, 'y', pix.y].join(' '),1);
+        var x = pix.x - half;
+        var y = pix.y;
+        const mintop = 30;
+        const minleft = 30; // $('#sidebarContent')[0].offsetWidth;
+        const maxbot = $mapEle[0].clientHeight;
+        const maxright = $mapEle[0].clientWidth;
+        if (y < mintop) { y = mintop; }
+        if (y+200 > maxbot) { y = maxbot-200; }
+        if (x < minleft) { x = minleft; }
+        if (x + wid > maxright) { x = maxright - wid; }
         var ofs = {};
-        ofs.top = iconofs.top + 30;
-        ofs.left = iconofs.left - center - $('#sidebarContent')[0].offsetWidth;
+        ofs.top = y;
+        ofs.left = x; // - $('#sidebarContent')[0].offsetWidth;
         $("#ohPopup").offset( ofs );
         $("#ohPopup").show();
 
         // Make the popup draggable
         dragElement(document.getElementById("ohPopup"));
-        $(".close-popover").click(function() { toggleReportPopover(rpt.imageDiv); });
+        $(".close-popover").click(function() { toggleReportPopover(rpt.id); });
     }
 
     // dragElement from https://www.w3schools.com/howto/howto_js_draggable.asp
@@ -457,11 +455,10 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         return Object.prototype.toString.apply(o) === '[object Array]';
     }
 
-    function processReportDetails(reportDetails, reports) {
+    function processReportDetails(reportDetails, context) {
         _reports = [];
-        _mapLayer.clearMarkers();
-        log('Adding reports to map...', 1);
         var top = reportDetails;
+        log('Adding ' + top.length + ' ' + context.type + ' reports to map...', 0);
 
         for (var i = 0; i < top.length; i++) {
             var report = top[i];
@@ -541,7 +538,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         Array.prototype.push.apply(context.results.reports, x);
 
         if (context.results.callCount === context.results.expectedCallCount) {
-            processReportDetails(context.results.reports);
+            processReportDetails(context.results.reports, context);
         }
     }
 
@@ -551,12 +548,16 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
             context: context,
             url: 'https://publicapi.ohgo.com/api/v1/' + context.type + `?${DEC(TOKEN)}`,
             //onload: function(res) { res.context.results.callCount += 1; processReports($.parseJSON(/\((.*)\)/.exec(res.responseText)[1]).features, res.context); },
-            onload: function(res) { res.context.results.callCount += 1; processReports($.parseJSON(res.responseText), res.context); },
-            onError: function(err) { log(err,0); }
+            onload: function(res) {
+                res.context.results.callCount += 1;
+                processReports($.parseJSON(res.responseText), res.context); },
+            onError: function(err) {
+                log(err,0); }
         });
     }
 
     function fetchReports() {
+        wmeSDK.Map.removeAllFeaturesFromLayer( { layerName: _layer_name } );
         var results = {callCount: 0, reports: [], expectedCallCount: 1};
         //var weatherClosureContext = { type:'weather_closure', results:results };
         var incidentContext= { type:'incidents', results:results };
@@ -575,70 +576,57 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         saveSettingsToStorage();
     }
 
-    function installIcon() {
-        OpenLayers.Icon = OpenLayers.Class({
-            url: null,
-            size: null,
-            offset: null,
-            calculateOffset: null,
-            imageDiv: null,
-            px: null,
-            initialize: function(a,b,c,d){
-                this.url=a;
-                this.size=b||{w: 20,h: 20};
-                this.offset=c||{x: -(this.size.w/2),y: -(this.size.h/2)};
-                this.calculateOffset=d;
-                a=OpenLayers.Util.createUniqueID("OL_Icon_");
-                var div = this.imageDiv=OpenLayers.Util.createAlphaImageDiv(a);
-                $(div.firstChild).removeClass('olAlphaImg');   // LEAVE THIS LINE TO PREVENT WME-HARDHATS SCRIPT FROM TURNING ALL ICONS INTO HARDHAT WAZERS --MAPOMATIC
-            },
-            destroy: function(){ this.erase();OpenLayers.Event.stopObservingElement(this.imageDiv.firstChild);this.imageDiv.innerHTML="";this.imageDiv=null; },
-            clone: function(){ return new OpenLayers.Icon(this.url,this.size,this.offset,this.calculateOffset); },
-            setSize: function(a){ null!==a&&(this.size=a); this.draw(); },
-            setUrl: function(a){ null!==a&&(this.url=a); this.draw(); },
-            draw: function(a){
-                OpenLayers.Util.modifyAlphaImageDiv(this.imageDiv,null,null,this.size,this.url,"absolute");
-                this.moveTo(a);
-                return this.imageDiv;
-            },
-            erase: function(){ null!==this.imageDiv&&null!==this.imageDiv.parentNode&&OpenLayers.Element.remove(this.imageDiv); },
-            setOpacity: function(a){ OpenLayers.Util.modifyAlphaImageDiv(this.imageDiv,null,null,null,null,null,null,null,a); },
-            moveTo: function(a){
-                null!==a&&(this.px=a);
-                null!==this.imageDiv&&(null===this.px?this.display(!1): (
-                    this.calculateOffset&&(this.offset=this.calculateOffset(this.size)),
-                    OpenLayers.Util.modifyAlphaImageDiv(this.imageDiv,null,{x: this.px.x+this.offset.x,y: this.px.y+this.offset.y})
-                ));
-            },
-            display: function(a){ this.imageDiv.style.display=a?"": "none"; },
-            isDrawn: function(){ return this.imageDiv&&this.imageDiv.parentNode&&11!=this.imageDiv.parentNode.nodeType; },
-            CLASS_NAME: "OpenLayers.Icon"
-        });
-    }
-
     function init511ReportsOverlay(){
-        installIcon();
-        _mapLayer = new OpenLayers.Layer.Markers("OH DOT Reports", {
-            displayInLayerSwitcher: true,
-            uniqueName: "__ohDotReports",
-        });
-
-        //I18n.translations[I18n.locale].layers.name.__stateDotReports = "OH DOT Reports";
-        W.map.addLayer(_mapLayer);
-        _mapLayer.setVisibility(true);
+        // setup layer style rules
+        const styleRules = [{
+            style: {
+                externalGraphic: _imagesPath + "construction.png",
+                graphicWidth: 29,
+                graphicHeight: 29,
+                fillOpacity: 0.9
+            },
+        },
+        {
+            predicate: (properties)=>{
+                return properties.type == 'cl-incident';
+            },
+            style: {
+                externalGraphic: _imagesPath + "cl-incident.png"
+            }
+        },
+        {
+            predicate: (properties)=>{
+                return properties.type == 'incident';
+            },
+            style: {
+                externalGraphic: _imagesPath + "incident.png"
+            }
+        },
+        {
+            predicate: (properties)=>{
+                return properties.type == 'weather';
+            },
+            style: {
+                externalGraphic: _imagesPath + "weather.png"
+            }
+        }
+       ];
+        wmeSDK.Map.addLayer( { layerName: _layer_name, styleRules } );
+        wmeSDK.Events.trackLayerEvents({ layerName: _layer_name });
         // _mapLayer.events.register('visibilitychanged',null,onLayerVisibilityChanged);
     }
 
     async function initUserPanel() {
         var tabLabel;
         var tabPane;
-        const pane = '<div class="side-panel-section>"><label style="width:100%; cursor:pointer; border-bottom: 1px solid #e0e0e0; margin-top:9px;" ' +
+        /* const pane = '<div class="side-panel-section>"><label style="width:100%; cursor:pointer; border-bottom: 1px solid #e0e0e0; margin-top:9px;" ' +
               'data-toggle="collapse" data-target="#ohDotSettingsCollapse" class="collapsed" aria-expanded="false">' +
               '<span class="fa fa-caret-down" style="margin-right:5px;font-size:120%;"></span>Hide reports...</label>' +
               '<div id="ohDotSettingsCollapse" class="collapse" aria-expanded="false" style="height: 0px;">' +
               '<div class="controls-container"><input type="checkbox" name="hideOHDotArchivedReports" id="hideOHDotArchivedReports">' +
-              '<label for="hideOHDotArchivedReports">Archived</label></div></div></div>' +
-              '<div class="side-panel-section>" id="oh-dot-report-table">' +
+              '<label for="hideOHDotArchivedReports">Archived</label></div></div>' +
+              */
+          const pane = '<div class="side-panel-section>" id="oh-dot-report-table">' +
               '<div><span title="Click to refresh DOT reports" class="fa fa-refresh refreshIcon oh-dot-refresh-reports oh-dot-table-label" style="cursor:pointer;"></span>' +
               '<span class="oh-dot-table-label oh-dot-report-count count"></span>' +
               '<span id="archive-all" class="oh-dot-table-label oh-dot-table-action right">Archive all</span>' +
@@ -646,13 +634,13 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
              // '<table class="oh-dot-table"><thead><tr><th id="oh-dot-table-archive-header" class="centered"><span class="fa fa-archive" style="font-size:120%" title="Sort by archived"></span></th>' +
              // '<th id="oh-dot-table-category-header" title="Sort by report type"></th><th id="oh-dot-table-desc-header" title="Sort by description">Description</th></tr></thead>';
 
-        var res = W.userscripts.registerSidebarTab("ohio-statedot");
+        var res = await wmeSDK.Sidebar.registerScriptTab();
+
         tabLabel = res.tabLabel;
         tabPane = res.tabPane;
         tabLabel.innerText = "OH DOT";
-        tabLabel.title = "Ohio DOT Reports";
+        tabLabel.title = _script_display_name;
         tabPane.innerHTML = pane;
-        await W.userscripts.waitForElementConnected(tabPane);
         $(tabLabel.parentElement).append(
                 $('<span>', {title:'Click to refresh DOT reports', class:'fa fa-refresh refreshIcon nav-tab-icon oh-dot-refresh-reports', style:'cursor:pointer;'})
             );
@@ -675,7 +663,6 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
             updateReportsVisibility();
         });
         $('.oh-dot-refresh-reports').click(function(e) {
-            //debugDumpLayers();
             hideAllReportPopovers();
             fetchReports(processReports);
             var refreshPopup = $('#oh-dot-refresh-popup');
@@ -705,7 +692,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         init511ReportsOverlay();
         initUserPanel();
         showScriptInfoAlert();
-        fetchReports(processReports);
+        setTimeout(fetchReports, 5000);
 
         var classHtml = [
             '.oh-dot-table th,td,tr {cursor:pointer;} ',
@@ -735,14 +722,18 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         ].join('');
         $('<style type="text/css">' + classHtml + '</style>').appendTo('head');
 
-        _previousZoom = W.map.zoom;
-        W.map.events.register('moveend',null,function() {if (_previousZoom !== W.map.zoom) {hideAllReportPopovers();} _previousZoom=W.map.zoom;});
+        _previousZoom = wmeSDK.Map.getZoomLevel();
     }
 
     var _previousZoom;
 
     function checkZoom() {
-        _mapLayer.setVisibility(W.map.getZoom() > 11);
+        const z = wmeSDK.Map.getZoomLevel();
+        wmeSDK.Map.setLayerVisibility({layerName: _layer_name, visibility: (z > 11)});
+        if (_previousZoom != z) {
+            hideAllReportPopovers();
+            _previousZoom = z;
+        }
     }
 
     function loadSettingsFromStorage() {
@@ -763,6 +754,7 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
     }
 
     function init() {
+
         log('Initializing...', 1);
         _icon.weather = 1;
         _icon.crash = 4;
@@ -772,18 +764,24 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         loadSettingsFromStorage();
         initGui();
         _window.addEventListener('beforeunload', function saveOnClose() { saveSettingsToStorage(); }, false);
-        W.map.events.register("zoomend", null, checkZoom);
+        wmeSDK.Events.on({ eventName: "wme-map-zoom-changed", eventHandler: checkZoom });
+        wmeSDK.Events.on({ eventName: "wme-layer-feature-clicked", eventHandler: onFeatureClick });
         log('Initialized.', 0);
     }
 
-    function bootstrap() {
-        if (typeof W === 'object' && W.userscripts?.state.isReady) {
-            init();
-        } else {
-            document.addEventListener("wme-ready", init, {
-                once: true,
-            });
-        }
+    function wmeReady() {
+        // initialize the sdk
+        wmeSDK = getWmeSdk({scriptId: _script_unique_id, scriptName: _script_display_name});
+        return new Promise(resolve => {
+            if (wmeSDK.State.isReady()) resolve();
+            wmeSDK.Events.once({ eventName: 'wme-ready' }).then(resolve);
+        });
+    }
+
+    async function bootstrap() {
+        await SDK_INITIALIZED;
+        await wmeReady();
+        init();
     }
 
     log('Bootstrap...', 0);
