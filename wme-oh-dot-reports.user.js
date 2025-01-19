@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2024.11.30.01
+// @version      2025.01.19.01
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @homepage     https://www.waze.com/discuss/t/script-wme-ohio-dot-reports/281863
@@ -16,7 +16,6 @@
 // ==/UserScript==
 
 /* global $ */
-/* global W */
 /* global SDK_INITIALIZED */
 
 const DEC = s => atob(atob(s));
@@ -380,10 +379,10 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
 
         const wid = $("#ohPopup").width();
         const half = wid/2;
-        var pix = W.map.getPixelFromLonLat(rpt.marker.glonlat); // SDK - need replacement func
+        var pix = wmeSDK.Map.getPixelFromLonLat( {lonLat: rpt.marker.glonlat} );
         log(['click','x',pix.x, 'y', pix.y].join(' '),1);
-        var x = pix.x - half;
-        var y = pix.y;
+        var x = pix.x - half - $('#sidebarContent')[0].offsetWidth - $('#drawer')[0].offsetWidth;
+        var y = pix.y - $('#app-head')[0].offsetHeight;
         const mintop = 30;
         const minleft = 30; // $('#sidebarContent')[0].offsetWidth;
         const maxbot = $mapEle[0].clientHeight;
