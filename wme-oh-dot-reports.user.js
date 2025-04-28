@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         WME Ohio DOT Reports
 // @namespace    https://greasyfork.org/users/166713
-// @version      2025.01.19.01
+// @version      2025.04.28.01
 // @description  Display OH transportation department reports in WME.
 // @author       DaveAcincy - based on VA DOT Reports by MapOMatic
 // @homepage     https://www.waze.com/discuss/t/script-wme-ohio-dot-reports/281863
@@ -694,30 +694,30 @@ const TOKEN = 'WVhCcExXdGxlVDAzWXpNeE5XRmpPUzAwWlRKakxUUmxZVFl0T1dNM05pMWhOelpsT
         setTimeout(fetchReports, 5000);
 
         var classHtml = [
-            '.oh-dot-table th,td,tr {cursor:pointer;} ',
+            '.oh-dot-table th, .oh-dot-table td, .oh-dot-table tr {cursor:pointer;} ',
             '.oh-dot-table .centered {text-align:center;} ',
-            '.oh-dot-table th:hover,tr:hover {background-color:aliceblue; outline: -webkit-focus-ring-color auto 5px;} ',
-            '.oh-dot-table th:hover {color:blue; border-color:whitesmoke; } ',
-            '.oh-dot-table {border:1px solid gray; border-collapse:collapse; width:100%; font-size:83%;margin:0px 0px 0px 0px} ',
-            '.oh-dot-table th,td {border:1px solid gainsboro;} ',
-            '.oh-dot-table td,th {color:black; padding:1px 4px;} ',
-            '.oh-dot-table th {background-color:gainsboro;} ',
+            '.oh-dot-table {border:1px solid gray; border-collapse:collapse; background-color: var(--background_default); width:100%; font-size:83%;margin:0px 0px 0px 0px} ',
+            '.oh-dot-table th, .oh-dot-table td {border:1px solid gainsboro; color: var(--content_p1); padding:1px 4px;} ',
+            '.oh-dot-table th {background-color: var(--background_default); } ',
+            '.oh-dot-table tr {background-color: var(--background_default); } ',
             '.oh-dot-table .table-img {max-width:24px; max-height:24px;} ',
             '.oh-dot-table .Closed {background-color:#ff9999;} ',
             '.oh-dot-table .Restricted {background-color:lightyellow;} ',
             '.tooltip.top > .tooltip-arrow {border-top-color:white;} ',
             '.tooltip.bottom > .tooltip-arrow {border-bottom-color:white;} ',
-            '.reportPop {display: block; position: absolute; width: 500px;left: 30%;top: 35%;background: #fff;display: none;}',
-            '.pop-title {background: #efefef;border: #ddd solid 1px;position: relative;display: block;}',
+            '.reportPop {display: block; position: absolute; width: 500px;left: 30%;top: 35%; background-color: var(--background_default); display: none;}',
+            '.pop-title {background: #efefef;border: var(--background_default) solid 1px; position: relative; display: block;}',
             '.pop-title-Closed {background: #ff9999;}',
             '.pop-title-Restricted {background-color:lightyellow;}',
-            '.pop-content {display: block;font-family: sans-serif;padding: 5px 10px;}',
-            '.pop-btns {padding: 5px 10px; }',
-            '.close-popover {text-decoration:none;padding:0px 3px;cursor: pointer;border-width:1px;background-color:white;border-color:ghostwhite} .close-popover:hover {padding:0px 4px;border-style:outset;border-width:1px;background-color:white;border-color:ghostwhite;} ',
+            '.pop-content {display: block; color: var(--content_p1); font-family: sans-serif;padding: 5px 10px;}',
+            '.pop-btns {padding: 5px 10px; background-color: var(--background_default); }',
+            '.btn-archive-dot-report { background-color: var(--primary); }',
+            '.close-popover {text-decoration:none;padding:0px 3px;cursor: pointer;border-width:1px; background-color:var(--background_default); border-color:ghostwhite}',
+            '.close-popover:hover {padding:0px 4px;border-style:outset;border-width:1px; background-color: var(--background_default); border-color:ghostwhite;} ',
             '#oh-dot-refresh-popup {position:absolute;z-index:9999;top:80px;left:650px;background-color:rgb(120,176,191);e;font-size:120%;padding:3px 11px;box-shadow:6px 8px rgba(20,20,20,0.6);border-radius:5px;color:white;} ',
             '.refreshIcon:hover {color:blue; text-shadow: 2px 2px #aaa;} .refreshIcon:active{ text-shadow: 0px 0px; }',
             '.oh-dot-archived-marker {opacity:0.5;} ',
-            '.oh-dot-table-label {font-size:85%;} .oh-dot-table-action:hover {color:blue;cursor:pointer} .oh-dot-table-label.right {float:right} .oh-dot-table-label.count {margin-left:4px;}'
+            '.oh-dot-table-label {font-size:85%;} .oh-dot-table-action:hover {color:blue;cursor:pointer} .oh-dot-table-label.right {float:right} .oh-dot-table-label.count {margin-left:4px; color: var(--content_p1); }'
         ].join('');
         $('<style type="text/css">' + classHtml + '</style>').appendTo('head');
 
